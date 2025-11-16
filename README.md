@@ -10,6 +10,66 @@ This plugin integrates Virtuals Protocol's Agent Communication Protocol (ACP) in
 - 💬 **Rich Messaging**: Send messages, create memos, and notifications for jobs
 - 🔌 **Easy Integration**: Simple service-based architecture with REST API endpoints
 
+## Architecture
+
+### Job Lifecycle
+
+1. **Job Received**: ACP client receives a new job via `onNewTask`
+2. **Check Configuration**: Plugin checks job type against registry
+3. **Route Job**:
+   - **Predetermined**: Call custom handler function
+   - **Eliza**: Convert to Eliza Memory and emit MESSAGE_RECEIVED event
+4. **Process**: Handler or AI processes the job
+5. **Respond**: Send messages, memos, or notifications back through ACP
+
+### Service Methods Flow
+
+```
+Runtime → AcpService → AcpClient → Virtuals Protocol
+                    ↓
+              Custom Handlers
+                    ↓
+              Eliza Runtime
+```
+
+### Complete Flow Diagram
+Flow Diagram (Updated with Runtime Integration):
+
+```
+Client        ACP Service         Handler              Eliza Runtime
+  |               |                  |                       |
+  |--query------->|                  |                       |
+  |  (REQUEST)    |                  |                       |
+  |               |--Check---------->|                       |
+  |               |  Capability      |                       |
+  |               |<--Can Handle-----|                       |
+  |               |                  |                       |
+  |<--Accept------|                  |                       |
+  |   & Require   |                  |                       |
+  |               |                  |                       |
+  |--Payment----->|                  |                       |
+  | (TRANSACTION) |                  |                       |
+  |               |--Process-------->|                       |
+  |               |                  |--Create Memory------->|
+  |               |                  |--Emit Event---------->|
+  |               |                  |   MESSAGE_RECEIVED    |
+  |               |                  |                       |
+  |               |                  |                   [Process]
+  |               |                  |                       |
+  |               |                  |<--Callback(response)--|
+  |               |                  |                       |
+  |               |                  |--Deliver Result------>|
+  |<--Response----|<--ACP Deliver----|                       |
+  |               |                  |<--Store Memory--------|
+  |               |                  |                       |
+```
+
+Key Steps:
+- ACP messages are properly stored as Memory objects
+- Eliza processes messages through the standard event system
+- Responses are delivered back through the ACP job callback
+- Full conversation history is maintained in the runtime
+
 ## Quickstart
 
 Use this minimal setup to initialize ACP and register job handlers after runtime is ready.
@@ -86,6 +146,7 @@ bun add @virtuals-protocol/acp-node
 
 ### Environment Variables
 
+
 Add these to your `.env` file:
 
 ```bash
@@ -98,9 +159,19 @@ ACP_AGENT_WALLET_ADDRESS=0x...      # Your agent's wallet address
 ACP_CONFIG_VERSION=V2                # ACP config version (default: V2)
 ```
 
+For how wallets map to these variables and how to whitelist your dev wallet, see: [Initialize and Whitelist Wallet](https://whitepaper.virtuals.io/acp-product-resources/acp-onboarding-guide/set-up-agent-profile/initialize-and-whitelist-wallet).
+
 ### Register the Plugin
 
 In your character config, include the plugin. For full setup and handler registration, see Quickstart above.
+
+### Job Configuration Requirements
+
+Use the ACP dashboard to define the jobs your agent offers and their requirements.
+
+![Configure job](images/configure-job.png)
+
+For detailed steps, see the onboarding guide: [ACP Onboarding Guide – Add the jobs you offer](https://whitepaper.virtuals.io/acp-product-resources/acp-onboarding-guide/set-up-agent-profile/register-agent#add-the-jobs-you-offer).
 
 ## Usage
 
@@ -304,291 +375,4 @@ export const acpConfig = {
         },
     },
 };
-```
-
-## Architecture
-
-### Job Lifecycle
-
-1. **Job Received**: ACP client receives a new job via `onNewTask`
-2. **Check Configuration**: Plugin checks job type against registry
-3. **Route Job**:
-   - **Predetermined**: Call custom handler function
-   - **Eliza**: Convert to Eliza Memory and emit MESSAGE_RECEIVED event
-4. **Process**: Handler or AI processes the job
-5. **Respond**: Send messages, memos, or notifications back through ACP
-
-### Service Methods Flow
-
-```
-Runtime → AcpService → AcpClient → Virtuals Protocol
-                    ↓
-              Custom Handlers
-                    ↓
-              Eliza Runtime
-```
-
-## Best Practices
-
-1. **Error Handling**: Always wrap ACP operations in try-catch blocks
-2. **Job Type Registry**: Define all job types upfront in configuration
-3. **Validation**: Validate job requirements before processing
-4. **Logging**: Use logger for debugging and monitoring
-5. **Phase Handling**: Handle both REQUEST and TRANSACTION phases appropriately
-6. **Memory Management**: Clean up job data after completion
-
-## Troubleshooting
-
-### Service Not Found
-
-**Error**: `ACP service not found`
-
-**Solution**: Ensure the plugin is registered in your character configuration:
-
-```typescript
-plugins: [virtualsAcpPlugin]
-```
-
-### Connection Failed
-
-**Error**: `Failed to register service virtuals-acp`
-
-**Solution**: Check your environment variables:
-- `ACP_WALLET_PRIVATE_KEY` must be valid
-- `ACP_ENTITY_ID` must be registered with Virtuals
-- `ACP_AGENT_WALLET_ADDRESS` must match your private key
-
-### Job Not Routing
-
-**Issue**: Jobs not being processed
-
-**Solution**: Verify job type is registered:
-
-```typescript
-// Check if job type exists in registry
-acpService.updateJobTypeRegistry({
-    "your_job_type": {
-        handlerType: "eliza", // or "predetermined"
-    },
-});
-```
-
-## Contributing
-
-To extend the plugin:
-
-1. Add new methods to `AcpService` class
-2. Create corresponding API routes in `routes/`
-3. Update types in `types.ts` if needed
-4. Document new features in README
-
-## License
-
-MIT
-
-## Eliza Handler Guide (Appendix)
-
-### Overview
-
-How the Eliza AI handler processes `custom_prompt` jobs through ACP phases.
-
-### Job Flow
-
-Two-phase flow:
-
-#### Phase 1: REQUEST → NEGOTIATION
-
-```typescript
-if (phase === AcpJobPhases.REQUEST && memoToSign?.nextPhase === AcpJobPhases.NEGOTIATION) {
-    const canHandle = await checkElizaCapability(job);
-    if (canHandle) {
-        await job.accept("Job requirement matches agent capability");
-        await job.createRequirement(`Job accepted, please make payment to proceed`);
-    } else {
-        await job.reject("Job requirement does not meet agent capability");
-    }
-}
-```
-
-#### Phase 2: TRANSACTION → EVALUATION
-
-```typescript
-if (phase === AcpJobPhases.TRANSACTION && memoToSign?.nextPhase === AcpJobPhases.EVALUATION) {
-    const deliverable = await processJobWithElizaAI(job, memoToSign);
-    if (deliverable) {
-        await job.deliver(deliverable);
-    } else {
-        await job.reject("Unable to process job requirement");
-    }
-}
-```
-
-## Complete Flow Diagram
-Flow Diagram (Updated with Runtime Integration):
-
-```
-Client        ACP Service         Handler              Eliza Runtime
-  |               |                  |                       |
-  |--query------->|                  |                       |
-  |  (REQUEST)    |                  |                       |
-  |               |--Check---------->|                       |
-  |               |  Capability      |                       |
-  |               |<--Can Handle-----|                       |
-  |               |                  |                       |
-  |<--Accept------|                  |                       |
-  |   & Require   |                  |                       |
-  |               |                  |                       |
-  |--Payment----->|                  |                       |
-  | (TRANSACTION) |                  |                       |
-  |               |--Process-------->|                       |
-  |               |                  |--Create Memory------->|
-  |               |                  |--Emit Event---------->|
-  |               |                  |   MESSAGE_RECEIVED    |
-  |               |                  |                       |
-  |               |                  |                   [Process]
-  |               |                  |                       |
-  |               |                  |<--Callback(response)--|
-  |               |                  |                       |
-  |               |                  |--Deliver Result------>|
-  |<--Response----|<--ACP Deliver----|                       |
-  |               |                  |<--Store Memory--------|
-  |               |                  |                       |
-```
-
-Key Steps:
-- ACP messages are properly stored as Memory objects
-- Eliza processes messages through the standard event system
-- Responses are delivered back through the ACP job callback
-- Full conversation history is maintained in the runtime
-
-
-### Job Structure
-
-Request Requirement:
-```typescript
-{
-  query: "What is the weather like today?",
-  context: {
-    location: "New York",
-    units: "metric"
-  },
-  expectedFormat: "text"
-}
-```
-
-Deliverable Response:
-```typescript
-{
-  type: "text",
-  value: "The weather in New York is sunny with a temperature of 22°C",
-  metadata: {
-    processedAt: "2025-10-21T12:00:00Z",
-    tokensUsed: 50,
-    model: "eliza-v1"
-  }
-}
-```
-
-### Configuration (Routing)
-
-Use the Quickstart’s `updateJobTypeRegistry` example to route `custom_prompt` jobs to Eliza AI.
-
-### Capability Checking
-
-```typescript
-private async checkElizaCapability(job: AcpJob): Promise<boolean> {
-    const requirement = job.requirement;
-    if (requirement.query?.length > 10000) return false;
-    const unsupportedKeywords = ["illegal", "harmful"];
-    if (unsupportedKeywords.some(k => requirement.query?.includes(k))) return false;
-    return true;
-}
-```
-
-### Processing with Eliza
-
-```typescript
-private async processJobWithElizaAI(job: AcpJob, memoToSign?: AcpMemo): Promise<any> {
-    const memory: Memory = {
-        id: messageId,
-        entityId,
-        agentId: this.runtime.agentId,
-        roomId,
-        content: {
-            text: JSON.stringify(job.requirement),
-            source: "acp",
-        },
-        metadata: {
-            type: "acp",
-            jobId: String(job.id),
-            requirement: job.requirement,
-        },
-    };
-    return new Promise((resolve) => {
-        const callback = async (content: Content) => {
-            const deliverable = { type: "text", value: content.text };
-            resolve(deliverable);
-        };
-        this.runtime.emitEvent(EventType.MESSAGE_RECEIVED, {
-            runtime: this.runtime,
-            message: memory,
-            callback,
-            source: "acp",
-        });
-    });
-}
-```
-
-### Error Handling
-
-Capability check fails (REQUEST):
-```typescript
-if (!canHandle) {
-    await job.reject("Job requirement does not meet agent capability");
-}
-```
-
-Processing fails (TRANSACTION):
-```typescript
-if (!deliverable) {
-    await job.reject("Unable to process job requirement");
-}
-```
-
-### Example: Custom Eliza Handler
-
-```typescript
-import { AcpJob, AcpJobPhases, AcpMemo } from "@virtuals-protocol/acp-node";
-import { AcpService } from "./service";
-
-export async function handleCustomQuery(job: AcpJob, service: AcpService) {
-    const { phase } = job;
-    if (phase === AcpJobPhases.REQUEST && memoToSign?.nextPhase === AcpJobPhases.NEGOTIATION) {
-        const requirement = job.requirement;
-        const canHandle = requirement.type === "custom_query";
-        if (canHandle) {
-            await job.accept("Custom query handler available");
-            await job.createRequirement("Payment required for processing");
-        } else {
-            await job.reject("This handler only processes custom queries");
-        }
-        return;
-    }
-    if (phase === AcpJobPhases.TRANSACTION && memoToSign?.nextPhase === AcpJobPhases.EVALUATION) {
-        try {
-            const result = await processCustomQuery(job.requirement);
-            const deliverable = {
-                type: "object",
-                value: {
-                    result,
-                    processedBy: "custom_handler",
-                    timestamp: Date.now(),
-                },
-            };
-            await job.deliver(deliverable);
-        } catch (error) {
-            await job.reject(`Processing failed: ${error.message}`);
-        }
-    }
-}
 ```
