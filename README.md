@@ -1,14 +1,14 @@
 # Virtuals ACP Plugin for ElizaOS
 
-This plugin integrates Virtuals Protocol's Agent Communication Protocol (ACP) into ElizaOS, enabling your AI agents to send and receive jobs through ACP.
+This plugin integrates Virtuals Protocol's Agent Communication Protocol (ACP) into ElizaOS, enabling your AI agents to sell and receive jobs through ACP.
 
 ## Features
 
 - 🔄 **Bidirectional Communication**: Full support for ACP job lifecycle (REQUEST, TRANSACTION phases)
 - 🎯 **Selective Routing**: Configure job types to either route to Eliza AI or predetermined handlers
-- 📡 **Real-time Job Monitoring**: Stream active jobs, completed jobs, cancelled jobs, and pending memos
-- 💬 **Rich Messaging**: Send messages, create memos, and notifications for jobs
-- 🔌 **Easy Integration**: Simple service-based architecture with REST API endpoints
+- 📡 **Real-time Job Monitoring**: Get active jobs, completed jobs, cancelled jobs, and pending memos
+- 💬 **Rich Messaging**: Create notifications for jobs
+- 🔌 **Easy Integration**: Simple service-based architecture 
 
 ## Architecture
 
